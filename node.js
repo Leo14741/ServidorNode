@@ -10,30 +10,50 @@ const cors = require('cors');
 
 const app = express();
 
-// Configurar el middleware CORS para Express
-app.use(cors({
-    origin: '127.0.0.1'
-}));
-
+app.use(cors());
+// Middleware para controlar la solicitud OPTIONS
+app.use((req, res, next) => {
+    if (req.method === 'OPTIONS') {
+        // Agregar los encabezados permitidos para la solicitud preflight
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.status(200).end();
+    } else {
+        next();
+    }
+});
 const server = http.createServer(app);
-const io = socketIO(server);
+const io = socketIO(server, {
+    cors: {
+        origin: "http://localhost:8080",
+        methods: ["GET", "POST"],
+        allowedHeaders: ["Content-Type", "Authorization"],
+        credentials: true
+    }
+});
+
+// Configurar el middleware CORS para Socket.IO
 
 // Variable global para controlar la ejecución de la función
 let isTrackingRunning = false;
 // Configurar el middleware body-parser
 app.use(bodyParser.json());
 // Configuración de la conexión a MySQL
-const pool = mysql.createPool({
-    host: '34.31.21.7',
-    user: 'root',
-    password: 'gtics2023',
-    database: 'telesystem_2',
-    connectionLimit: 20,
-});
-
+let socketClient;
 var tiempo;
+var distanciaRecorrida = 0;
+var distanciaTotalInicial = 0;
+var tiempoTranscurrido = 0;
 
-function set_map1(ruta, tiempoStr, latitud, longitud) {
+function sendPorcentajeRecorrido(porcentajeRecorrido) {
+    // Emite el evento 'porcentajeRecorrido' a través de la conexión WebSocket
+    if (socketClient) {
+        socketClient.emit('porcentajeRecorrido', porcentajeRecorrido);
+    }
+}
+
+
+function startTracking(ruta, tiempoStr, latitud, longitud) {
     tiempo = parseInt(tiempoStr); // Extrae el valor numérico de la cadena
 
     console.log(tiempo); // Imprime el tiempo en minutos
@@ -115,37 +135,39 @@ function set_map1(ruta, tiempoStr, latitud, longitud) {
         return distance;
     }
 
-    var distanciaTotalInicial = calculateDistance(coordenadas); // Obtiene la distancia total de la ruta
+    distanciaTotalInicial = calculateDistance(coordenadas); // Obtiene la distancia total de la ruta
     console.log("distancia: "+distanciaTotalInicial)
 
     var velocidad = distanciaTotalInicial / tiempoTotal; // Calcula la velocidad CONSTANTE necesaria para completar la ruta en el tiempo especificado
     console.log("velocidad: " +velocidad)
 
-    var distanciaRecorrida = 0;
-    var tiempoTranscurrido = 0;
-
-    var interval = setInterval(function() {
+    var interval = setInterval(function () {
         if (distanciaRecorrida >= distanciaTotalInicial) {
             clearInterval(interval); // Detiene la actualización cuando se ha completado la ruta
-        }
-        else {
+        } else {
             var porcentajeRecorrido = distanciaRecorrida / distanciaTotalInicial;
-            console.log("porcentaje" + porcentajeRecorrido)
-            // Agrega el encabezado CORS a la respuesta
 
-            // Emite el evento 'porcentajeRecorrido'
-            var a = io.emit('porcentajeRecorrido', porcentajeRecorrido);
-            console.log(a)
+            // Emite el evento 'porcentajeRecorrido' a través de la conexión WebSocket
+            sendPorcentajeRecorrido(porcentajeRecorrido);
+
             distanciaRecorrida += velocidad;
             tiempoTranscurrido += 1000; // Intervalo de actualización en milisegundos
-            console.log("tiempo: " + tiempoTranscurrido)
+            console.log("tiempo: " + tiempoTranscurrido);
+            console.log("tiempo: " + porcentajeRecorrido);
         }
-
     }, 1000); // Intervalo de actualización en milisegundos
 }
+
+io.on('connection', (socket) => {
+    console.log('Cliente conectado');
+    socketClient = socket;
+
+    // Envía el valor inicial de porcentajeRecorrido al cliente cuando se conecte
+    sendPorcentajeRecorrido(distanciaRecorrida / distanciaTotalInicial);
+});
 // Ruta para obtener la ruta y datos iniciales
 // Ruta GET para obtener la ruta y datos iniciales
-app.get('/paciente/tracking', (req, res) => {
+app.get('/clash', (req, res) => {
     try {
         if (!isTrackingRunning) {
             const latitud = parseFloat(req.query.latitud1);
@@ -158,7 +180,7 @@ app.get('/paciente/tracking', (req, res) => {
             // Lógica para obtener la ruta y datos iniciales
 
             // Define la tarea programada para ejecutarse cada segundo
-                set_map1(ruta, tiempoStr,latitud, longitud);
+                startTracking(ruta, tiempoStr,latitud, longitud);
                 isTrackingRunning = true;
         }
 
