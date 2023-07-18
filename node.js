@@ -146,9 +146,17 @@ function startTracking(ruta, tiempoStr, latitud, longitud) {
         if (distanciaRecorrida >= distanciaTotalInicial) {
             setTimeout(function () {
                 sendPorcentajeRecorrido(0);
-            }, 60000); // 1 minuto en milisegundos
 
+                // Desconectar al cliente y reiniciar las variables globales
+                socketClient.disconnect();
+                isTrackingRunning = false;
+                distanciaRecorrida = 0;
+                distanciaTotalInicial = 0;
+                tiempoTranscurrido = 0;
+                socketClient = null; // También puedes restablecer la variable socketClient a null
+            }, 60000); // 1 minuto en milisegundos
             clearInterval(interval); // Detiene la actualización cuando se ha completado la ruta
+
         } else {
             porcentajeRecorrido = distanciaRecorrida / distanciaTotalInicial;
 
@@ -169,6 +177,8 @@ io.on('connection', (socket) => {
 
     // Envía el valor inicial de porcentajeRecorrido al cliente cuando se conecte
     sendPorcentajeRecorrido(distanciaRecorrida / distanciaTotalInicial);
+
+
 });
 // Ruta para obtener la ruta y datos iniciales
 // Ruta GET para obtener la ruta y datos iniciales
