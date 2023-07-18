@@ -25,7 +25,7 @@ app.use((req, res, next) => {
 const server = http.createServer(app);
 const io = socketIO(server, {
     cors: {
-        origin: "http://localhost:8080",
+        origin: "*",
         methods: ["GET", "POST"],
         allowedHeaders: ["Content-Type", "Authorization"],
         credentials: true
@@ -140,12 +140,17 @@ function startTracking(ruta, tiempoStr, latitud, longitud) {
 
     var velocidad = distanciaTotalInicial / tiempoTotal; // Calcula la velocidad CONSTANTE necesaria para completar la ruta en el tiempo especificado
     console.log("velocidad: " +velocidad)
+    var porcentajeRecorrido = 0;
 
     var interval = setInterval(function () {
         if (distanciaRecorrida >= distanciaTotalInicial) {
+            setTimeout(function () {
+                sendPorcentajeRecorrido(0);
+            }, 60000); // 1 minuto en milisegundos
+
             clearInterval(interval); // Detiene la actualización cuando se ha completado la ruta
         } else {
-            var porcentajeRecorrido = distanciaRecorrida / distanciaTotalInicial;
+            porcentajeRecorrido = distanciaRecorrida / distanciaTotalInicial;
 
             // Emite el evento 'porcentajeRecorrido' a través de la conexión WebSocket
             sendPorcentajeRecorrido(porcentajeRecorrido);
